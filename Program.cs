@@ -11,13 +11,26 @@ using System.Threading;
 using System.Drawing;
 using System.IO;
 using System.IO.Ports;
+using RabbitMQ.Client;
 
 
 namespace VirtualPreycap
 {
+
+    class RMQHost
+    {
+        public IModel channel; 
+        public RMQHost()
+        {
+            var factory = new ConnectionFactory() { HostName = "localhost" };
+            var connection = factory.CreateConnection();
+            channel = connection.CreateModel(); 
+        }
+    }
+
+
     class Program
     {
-
         static void PrintBuildInfo()
         {
             FC2Version version = ManagedUtilities.libraryVersion;
@@ -39,9 +52,18 @@ namespace VirtualPreycap
             Console.WriteLine(newStr);
         }
 
-        unsafe void RunSingleCamera(ManagedPGRGuid guid, string save_location, int numImages)
+        unsafe void RunSingleCamera(ManagedPGRGuid guid, string save_location, int numImages, RMQHost rmqhost, string queue_ID)
         {
+            // Make a RabbitMQ pipe server to pass tail coordinates to
 
+            IDictionary<string, object> args = new Dictionary<string, object>();
+            args.Add("x-max-length", 19);
+            rmqhost.channel.QueueDeclare(queue: queue_ID,
+                                         durable: false,
+                                         exclusive: false,
+                                         autoDelete: true,
+                                         arguments: args);
+            string tailcommands = "";
             ManagedCamera cam = new ManagedCamera();
             // Connect to a camera
             cam.Connect(guid);
@@ -87,6 +109,18 @@ namespace VirtualPreycap
                 IntPtr point = (IntPtr)convertedImage.data;
 
                 Mat cvimage = new Mat(framesize, Emgu.CV.CvEnum.DepthType.Cv8U, 1, point, cols);
+
+                // here call out to contour finding function to get tail angle and record an eye angle
+                // tailcommands = imageCnt.ToString();
+                tailcommands = "Hey Cora!";
+                var msg = Encoding.UTF8.GetBytes(tailcommands);
+
+                rmqhost.channel.BasicPublish(exchange: "",
+                                             routingKey: queue_ID,
+                                             basicProperties: null,
+                                             body: msg);
+
+
                 camvid.Write(cvimage);
                 if (imageCnt % 200 == 0)
                 {
@@ -105,57 +139,41 @@ namespace VirtualPreycap
         }
         static void Main(string[] args)
         {
-            Console.WriteLine("Hello World!");
             PrintBuildInfo();
             Program program = new Program();
             SerialPort pyboard = new SerialPort("COM3", 115200);
             pyboard.Open();
             pyboard.WriteLine("import rig_load\r");
             FileStream fileStream;
-            //try
-            //{
-            //    fileStream = new FileStream(@"test.txt", FileMode.Create);
-            //    fileStream.Close();
-            //    File.Delete("test.txt");
-            //}
-            //catch
-            //{
-            //    Console.WriteLine("Failed to create file in current folder.  Please check permissions.\n");
-            //    return;
-            //}
-
-            // Here want to take the ID number of the experiment instead of the total number of frames. The number of frames will be set by the set experiment parameters established. Have user input from console.writeline "Please Enter Experiment ID". saveto will occur after the input of this line, and will be "D:/"+idstring+"cam0.AVI". etc. int frames, instead of being framestring, will just be a constant. calculate this tomorrow after you've established the exact paradigm. 
 
             ManagedBusManager busMgr = new ManagedBusManager();
             uint numCameras = busMgr.GetNumOfCameras();
-
             Console.WriteLine("Number of cameras detected: {0}", numCameras);
-
-            // List<string> save_to = new List<string>{"D:/Movies/cam0.AVI","E:/Movies/cam1.AVI"};
             Console.WriteLine("Please Enter Experiment ID: ");
             string idstring = Console.ReadLine();
-            List<string> save_to = new List<string> { "D:/Movies/" + idstring + "_cam0.AVI", "E:/Movies/" + idstring + "_cam1.AVI" };
+            List<string> save_to = new List<string> { "C:/Users/Deadpool2/PreyCapResults/" + idstring + "_cam1.AVI", "C:/Users/Deadpool2/PreyCapresults/" + idstring + "_cam2.AVI" };
             Console.WriteLine("Please Enter Number of Frames: ");
             string framestring = Console.ReadLine();
             int frames = Convert.ToInt32(framestring);
+            RMQHost rabbitMQhost = new RMQHost();
 
             if (numCameras == 1)
             {
                 ManagedPGRGuid guid = busMgr.GetCameraFromIndex(0);
-                program.RunSingleCamera(guid, "C:/Users/Deadpool2/PreyCapResults/pc.AVI", frames);
+                program.RunSingleCamera(guid, save_to[0], frames, rabbitMQhost, "camera1");
+                //pyboard.WriteLine("rig_load.full_experiment(True,True)\r");
             }
             else if (numCameras == 2)
             {
                 ManagedPGRGuid camid1 = busMgr.GetCameraFromIndex(0);
                 ManagedPGRGuid camid2 = busMgr.GetCameraFromIndex(1);
-                Thread camthread1 = new Thread(() => program.RunSingleCamera(camid1, save_to[0], frames));
+                Thread camthread1 = new Thread(() => program.RunSingleCamera(camid1, save_to[0], frames, rabbitMQhost, "camera1"));
                 camthread1.Start();
                 // have to declare this way if your return is a void but you pass variables to the function
-                Thread camthread2 = new Thread(() => program.RunSingleCamera(camid2, save_to[1], frames));
+                Thread camthread2 = new Thread(() => program.RunSingleCamera(camid2, save_to[1], frames, rabbitMQhost, "camera2"));
                 camthread2.Start();
                 pyboard.WriteLine("rig_load.full_experiment(True,True)\r");
-                //                pyboard.WriteLine("rig_load.full_experiment(True,True)\r");
-                //                pyboard.WriteLine("rig_load.light_test()\r");
+
             }
         }
     }

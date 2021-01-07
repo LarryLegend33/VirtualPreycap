@@ -40,3 +40,5 @@ C:\Users\Deadpool2\VirtualPreycap\bin\Debug\netcoreapp3.1\System.Drawing.Common.
 C:\Users\Deadpool2\VirtualPreycap\bin\Debug\netcoreapp3.1\runtimes\win\lib\netcoreapp3.0\Microsoft.Win32.SystemEvents.dll
 C:\Users\Deadpool2\VirtualPreycap\bin\Debug\netcoreapp3.1\runtimes\unix\lib\netcoreapp3.0\System.Drawing.Common.dll
 C:\Users\Deadpool2\VirtualPreycap\bin\Debug\netcoreapp3.1\runtimes\win\lib\netcoreapp3.0\System.Drawing.Common.dll
+C:\Users\Deadpool2\VirtualPreycap\bin\Debug\netcoreapp3.1\RabbitMQ.Client.dll
+C:\Users\Deadpool2\VirtualPreycap\bin\Debug\netcoreapp3.1\System.Threading.Channels.dll
